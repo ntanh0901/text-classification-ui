@@ -1,75 +1,97 @@
 import * as tf from "@tensorflow/tfjs";
 import { ChatHistory } from "@/lib/chatHistory";
 
-// Pre-defined food categories and keywords
-const foodCategories = {
-  fruits: [
-    "apple",
-    "banana",
-    "orange",
-    "grape",
-    "strawberry",
-    "blueberry",
-    "peach",
+// Pre-defined text categories and their keywords
+const textCategories = {
+  positive: [
+    "good",
+    "great",
+    "excellent",
+    "amazing",
+    "wonderful",
+    "happy",
+    "love",
+    "fantastic",
+    "perfect",
+    "best",
   ],
-  vegetables: ["carrot", "broccoli", "spinach", "potato", "tomato", "cucumber"],
-  grains: ["rice", "pasta", "bread", "cereal", "oats", "quinoa"],
-  proteins: ["chicken", "beef", "fish", "eggs", "tofu", "beans", "lentils"],
-  dairy: ["milk", "cheese", "yogurt", "butter", "cream"],
-  desserts: ["cake", "cookie", "ice cream", "pie", "chocolate"],
+  negative: [
+    "bad",
+    "terrible",
+    "awful",
+    "horrible",
+    "hate",
+    "worst",
+    "poor",
+    "disappointing",
+    "wrong",
+    "failed",
+  ],
+  neutral: [
+    "okay",
+    "fine",
+    "alright",
+    "normal",
+    "average",
+    "regular",
+    "standard",
+    "typical",
+    "usual",
+    "common",
+  ],
+  question: [
+    "what",
+    "when",
+    "where",
+    "who",
+    "why",
+    "how",
+    "?",
+    "can",
+    "could",
+    "would",
+    "should",
+    "is",
+    "are",
+    "do",
+    "does",
+  ],
 };
 
-// Simple food extractor function
-function extractFoodItems(text: string): string[] {
+// Simple text classifier function
+function classifyText(text: string): { category: string; confidence: number } {
   const lowerText = text.toLowerCase();
-  const foods: string[] = [];
+  let maxMatches = 0;
+  let bestCategory = "neutral";
 
-  // Check each category and word
-  Object.values(foodCategories)
-    .flat()
-    .forEach((food) => {
-      if (lowerText.includes(food) && !foods.includes(food)) {
-        foods.push(food);
-      }
-    });
+  // Count matches for each category
+  Object.entries(textCategories).forEach(([category, keywords]) => {
+    const matches = keywords.filter((keyword) =>
+      lowerText.includes(keyword)
+    ).length;
+    if (matches > maxMatches) {
+      maxMatches = matches;
+      bestCategory = category;
+    }
+  });
 
-  return foods;
+  // Calculate a simple confidence score
+  const totalKeywords = Object.values(textCategories).flat().length;
+  const confidence = maxMatches / totalKeywords;
+
+  return {
+    category: bestCategory,
+    confidence: Math.min(confidence * 2, 1), // Scale confidence to be between 0 and 1
+  };
 }
 
-export async function* bot(
-  userPrompt: string,
-  chatHistory: ChatHistory,
-  chatId: string
-) {
-  // Extract food items from the user prompt
-  const foodItems = extractFoodItems(userPrompt);
-
-  chatHistory.add(chatId, "USER", userPrompt);
-
-  // Generate response based on food items
-  let response = "I'm a helpful assistant for food and cooking. ";
-
-  if (foodItems.length > 0) {
-    response += `I noticed you mentioned ${foodItems.join(", ")}. `;
-
-    // Add some context based on the food items
-    if (foodItems.some((food) => foodCategories["fruits"].includes(food))) {
-      response += "Fruits are excellent for snacks and desserts. ";
-    }
-    if (foodItems.some((food) => foodCategories["vegetables"].includes(food))) {
-      response += "Remember to include vegetables for a balanced meal. ";
-    }
-    // Add more customized responses as needed
-  }
-
-  response += "How can I help with your cooking or food questions today?";
-
-  // Simulate streaming response
+export async function* bot(userPrompt: string, chatId: string) {
+  // Hard-coded response for demo
+  const response = `You said: "${userPrompt}". This is a hard-coded bot response.`;
+  // Simulate streaming by yielding one word at a time
   const words = response.split(" ");
   for (const word of words) {
     yield word + " ";
-    await new Promise((resolve) => setTimeout(resolve, 50)); // Delay for streaming effect
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
-
-  chatHistory.add(chatId, "ASSISTANT", response);
 }
