@@ -105,11 +105,18 @@ export function Chat() {
   // Fetch chats from MongoDB when authenticated
   useEffect(() => {
     if (status === "authenticated") {
-      fetch("/api/chat")
+      fetch("/api/chat", {
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
         .then((res) => res.json())
-        .then((chatsFromDb) => {
+        .then((data) => {
+          const chatsFromDb = Array.isArray(data) ? data : [];
           const chatMap: Record<string, ChatState> = {};
           const chatHist: ChatHistory[] = [];
+
           for (const chat of chatsFromDb) {
             chatMap[chat._id] = { messages: chat.messages, title: chat.title };
             chatHist.push({
@@ -121,6 +128,9 @@ export function Chat() {
           setChats(chatMap);
           setChatHistory(chatHist);
           if (chatHist.length > 0) setSelectedChatId(chatHist[0].id);
+        })
+        .catch((error) => {
+          console.error("Error fetching chats:", error);
         });
     }
   }, [status]);
