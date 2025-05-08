@@ -116,5 +116,5 @@ export async function GET(request: NextRequest) {
     userId: user._id,
   }).sort({ createdAt: -1 }); // Sort by newest first
 
-  return new Response(JSON.stringify(chats), { status: 200 });
+  return new Response(JSON.stringify(chats), { status: 200 }); //
 }
