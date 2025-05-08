@@ -1,7 +1,7 @@
 // icon:user-circle | Tabler Icons https://tablericons.com/ | Csaba Kissi
 import * as React from "react";
 
-function UserIcon(props) {
+function UserIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       fill="none"
@@ -22,5 +22,4 @@ function UserIcon(props) {
   );
 }
 
-export default IconUserCircle;
-
+export default UserIcon;

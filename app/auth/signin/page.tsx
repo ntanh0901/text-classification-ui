@@ -1,10 +1,10 @@
 "use client";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 
-export default function SignIn() {
+function SignInForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") || "");
   const [password, setPassword] = useState("");
@@ -162,5 +162,13 @@ export default function SignIn() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function SignIn() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SignInForm />
+    </Suspense>
   );
 }

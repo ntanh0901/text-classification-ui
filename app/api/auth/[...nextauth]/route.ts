@@ -4,7 +4,7 @@ import { dbConnect, User } from "@/lib/mongodb";
 import type { SessionStrategy } from "next-auth";
 import bcrypt from "bcryptjs";
 
-export const authOptions = {
+const handler = NextAuth({
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -50,9 +50,6 @@ export const authOptions = {
   pages: {
     signIn: "/auth/signin", // (optional) custom sign-in page
   },
-};
-
-// This is the correct handler for the App Router!
-const handler = NextAuth(authOptions);
+});
 
 export { handler as GET, handler as POST };
