@@ -1,125 +1,281 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useEnterSubmit } from "@/lib/hooks/useEnterSubmit";
 import { sb } from "substrate";
 import { SendIcon } from "@/components/icons/SendIcon";
 import { UserIcon } from "@/components/icons/UserIcon";
 import { SubstrateIcon } from "@/components/icons/SubstrateIcon";
-
+import { Sidebar, type ChatHistory } from "@/components/Sidebar";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useSession } from "next-auth/react";
 
 type SubstrateStream = Awaited<ReturnType<typeof sb.streaming.fromSSEResponse>>;
 
 type MessageItem =
-  | { from: "USER"; content: string }
+  | { from: "USER"; content: string; timestamp: Date }
   | {
       from: "ASSISTANT";
-      stream: SubstrateStream;
+      content: string;
+      timestamp: Date;
+      isStreaming?: boolean;
     };
 
-function UserMessage({ content }: { content: string }) {
+type ChatState = {
+  messages: MessageItem[];
+  title: string;
+};
+
+function UserMessage({
+  content,
+  timestamp,
+}: {
+  content: string;
+  timestamp: Date;
+}) {
   return (
-    <div className="rounded flex flex-row space-x-2 p-2">
-      <div className="p-2 w-[48px]">
+    <div className="flex flex-row space-x-4 p-4 bg-white rounded-lg shadow-sm">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
         <UserIcon />
       </div>
-      <div className="rounded bg-white border drop-shadow-sm grow p-2">
-        {content}
+      <div className="flex-grow">
+        <div className="flex items-center justify-between mb-1">
+          <div className="font-semibold text-gray-700">You</div>
+          <div className="text-xs text-gray-500">
+            {timestamp.toLocaleTimeString()}
+          </div>
+        </div>
+        <div className="text-gray-800 whitespace-pre-wrap">{content}</div>
       </div>
     </div>
   );
 }
 
-function AIMessage({ stream }: { stream: SubstrateStream }) {
-  const [content, setContent] = useState<string>("");
+function AIMessage({
+  content,
+  timestamp,
+  isStreaming,
+}: {
+  content: string;
+  timestamp: Date;
+  isStreaming?: boolean;
+}) {
+  const [displayContent, setDisplayContent] = useState(content);
+
   useEffect(() => {
-    (async () => {
-      for await (let message of stream) {
-        setContent((content) => content + message.content);
-      }
-    })();
-  }, []);
+    setDisplayContent(content);
+  }, [content]);
 
   return (
-    <div className="rounded flex flex-row space-x-2 p-2">
-      <div className="p-2 w-[48px]">
+    <div className="flex flex-row space-x-4 p-4 bg-gray-50 rounded-lg shadow-sm">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
         <SubstrateIcon />
       </div>
-      <div className="rounded bg-white border drop-shadow-sm grow p-2">
-        <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+      <div className="flex-grow">
+        <div className="flex items-center justify-between mb-1">
+          <div className="font-semibold text-gray-700">AI Assistant</div>
+          <div className="text-xs text-gray-500">
+            {timestamp.toLocaleTimeString()}
+          </div>
+        </div>
+        <div className="text-gray-800 prose prose-sm max-w-none">
+          <Markdown remarkPlugins={[remarkGfm]}>{displayContent}</Markdown>
+        </div>
       </div>
     </div>
   );
 }
 
-export function Chat(props: { chatId: string }) {
+export function Chat() {
+  const { data: session, status } = useSession();
   const { formRef, onKeyDown } = useEnterSubmit();
-  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string>("");
+  const [chats, setChats] = useState<Record<string, ChatState>>({});
   const [userPrompt, setUserPrompt] = useState<string>("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  async function submitPrompt(event: any) {
-    event.preventDefault();
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chats[selectedChatId]?.messages]);
 
-    setMessages((messages) => [
-      ...messages,
-      { from: "USER", content: userPrompt } as MessageItem,
-    ]);
+  // Fetch chats from MongoDB when authenticated
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/chat")
+        .then((res) => res.json())
+        .then((chatsFromDb) => {
+          const chatMap: Record<string, ChatState> = {};
+          const chatHist: ChatHistory[] = [];
+          for (const chat of chatsFromDb) {
+            chatMap[chat._id] = { messages: chat.messages, title: chat.title };
+            chatHist.push({
+              id: chat._id,
+              title: chat.title,
+              timestamp: new Date(chat.createdAt),
+            });
+          }
+          setChats(chatMap);
+          setChatHistory(chatHist);
+          if (chatHist.length > 0) setSelectedChatId(chatHist[0].id);
+        });
+    }
+  }, [status]);
 
-    setUserPrompt("");
-
-    const request = new Request("/api/chat", {
+  // Create a new chat in MongoDB
+  const handleNewChat = async () => {
+    const res = await fetch("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ chatId: props.chatId, userPrompt }),
+      body: JSON.stringify({}),
+      headers: { "Content-Type": "application/json" },
     });
-    const response = await fetch(request);
-
-    if (response.ok) {
-      const stream = await sb.streaming.fromSSEResponse(response);
-      setMessages((messages) => [
-        ...messages,
-        { from: "ASSISTANT", stream } as MessageItem,
+    if (res.ok) {
+      const chat = await res.json();
+      setChats((prev) => ({
+        ...prev,
+        [chat._id]: { messages: chat.messages, title: chat.title },
+      }));
+      setChatHistory((prev) => [
+        {
+          id: chat._id,
+          title: chat.title,
+          timestamp: new Date(chat.createdAt),
+        },
+        ...prev,
       ]);
+      setSelectedChatId(chat._id);
+      setUserPrompt("");
+    }
+  };
+
+  // Select a chat
+  const handleChatSelect = (chatId: string) => {
+    setSelectedChatId(chatId);
+    setUserPrompt("");
+  };
+
+  // Send a message and update chat in MongoDB
+  async function submitPrompt(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!userPrompt.trim() || isProcessing || !selectedChatId) return;
+
+    setIsProcessing(true);
+
+    try {
+      const request = new Request("/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ chatId: selectedChatId, userPrompt }),
+      });
+      const response = await fetch(request);
+
+      if (response.ok) {
+        // Optionally, you can stream the response for animation
+        // For now, just update the chat with the new data
+        const chat = await response.json();
+        setChats((prev) => ({
+          ...prev,
+          [chat._id]: { messages: chat.messages, title: chat.title },
+        }));
+        setChatHistory((prev) =>
+          prev.map((c) =>
+            c.id === chat._id
+              ? { ...c, timestamp: new Date(chat.createdAt) }
+              : c
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setUserPrompt("");
+      setIsProcessing(false);
     }
   }
 
-  return (
-    <div className="">
-      <div className="mx-auto sm:max-w-3xl sm:px-4 space-y-2 pt-12 pb-32">
-        {messages.map((message, i) =>
-          message.from === "USER" ? (
-            <UserMessage key={i} content={message.content} />
-          ) : (
-            <AIMessage key={i} stream={message.stream} />
-          ),
-        )}
-      </div>
+  const currentChat = chats[selectedChatId];
 
-      <div className="fixed bottom-0 w-full">
-        <div className="mx-auto sm:max-w-2xl sm:px-4">
-          <div className="space-y-4 border-t backdrop-blur-lg drop-shadow-2xl bg-white/30 px-4 py-2 shadow-lg sm:rounded-t-xl sm:border md:py-4">
-            <form ref={formRef} className="" onSubmit={submitPrompt}>
-              <div className="shadow-xl flex flex-row space-x-2 rounded bg-white">
-                <input
-                  name="prompt"
-                  autoFocus={true}
-                  placeholder="Enter your prompt..."
-                  value={userPrompt}
-                  onChange={(event) => setUserPrompt(event.target.value)}
-                  type="text"
-                  className="min-h-[50px] w-full px-4 py-0 focus-within:outline-none rounded"
-                  onKeyDown={onKeyDown}
-                />
-                <button
-                  type="submit"
-                  className="rounded pr-4 hover:text-blue-400"
-                >
-                  <SendIcon />
-                </button>
+  return (
+    <div className="flex h-screen bg-gray-100">
+      <Sidebar
+        selectedChatId={selectedChatId}
+        onChatSelect={handleChatSelect}
+        onNewChat={handleNewChat}
+        chatHistory={chatHistory}
+      />
+
+      {/* Main Chat Area */}
+      <div className="flex-grow flex flex-col">
+        {/* Messages Area */}
+        <div className="flex-grow overflow-y-auto p-4 space-y-4">
+          {!selectedChatId || !currentChat?.messages.length ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center text-gray-500">
+                <h3 className="text-lg font-medium mb-2">
+                  Welcome to Text Classification
+                </h3>
+                <p className="text-sm">
+                  Enter some text to analyze its sentiment and intent.
+                </p>
               </div>
-            </form>
-          </div>
+            </div>
+          ) : (
+            <>
+              {currentChat.messages.map((message, i) =>
+                message.from === "USER" ? (
+                  <UserMessage
+                    key={i}
+                    content={message.content}
+                    timestamp={new Date(message.timestamp)}
+                  />
+                ) : (
+                  <AIMessage
+                    key={i}
+                    content={message.content}
+                    timestamp={new Date(message.timestamp)}
+                    isStreaming={message.isStreaming}
+                  />
+                )
+              )}
+              <div ref={messagesEndRef} />
+            </>
+          )}
+        </div>
+
+        {/* Input Area */}
+        <div className="border-t border-gray-200 bg-white p-4">
+          <form
+            ref={formRef}
+            onSubmit={submitPrompt}
+            className="max-w-4xl mx-auto"
+          >
+            <div className="relative">
+              <input
+                name="prompt"
+                autoFocus={true}
+                placeholder="Enter text to analyze..."
+                value={userPrompt}
+                onChange={(event) => setUserPrompt(event.target.value)}
+                type="text"
+                className="w-full px-4 py-3 pr-12 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onKeyDown={onKeyDown}
+                disabled={isProcessing || !selectedChatId}
+              />
+              <button
+                type="submit"
+                className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-lg ${
+                  isProcessing || !selectedChatId
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "text-blue-500 hover:bg-blue-50"
+                }`}
+                disabled={isProcessing || !selectedChatId}
+              >
+                <SendIcon />
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

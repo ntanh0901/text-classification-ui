@@ -1,10 +1,9 @@
-import { Chat }  from "@/components/Chat";
-import { randomString } from "@/lib/randomString";
+import { Chat } from "@/components/Chat";
 
 export default function Home() {
   return (
     <main>
-      <Chat chatId={randomString(32)} />
+      <Chat />
     </main>
   );
 }

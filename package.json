@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.2",
+    "mongoose": "^8.14.1",
     "next": "14.2.3",
+    "next-auth": "^4.24.11",
     "react": "^18",
     "react-dom": "^18",
     "react-markdown": "^9.0.1",
