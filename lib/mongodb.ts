@@ -21,6 +21,11 @@ export interface IMessage {
   from: string;
   content: string;
   timestamp: Date;
+  modelType?: number; // 1 for ViT5, 2 for PhoBERT
+  classification?: {
+    result: string;
+    confidence?: number;
+  };
 }
 
 export interface IChat extends Document {
@@ -34,6 +39,11 @@ const MessageSchema = new Schema<IMessage>({
   from: { type: String, required: true },
   content: { type: String, required: true },
   timestamp: { type: Date, required: true },
+  modelType: { type: Number, enum: [1, 2], required: false }, // 1 for ViT5, 2 for PhoBERT
+  classification: {
+    result: { type: String, required: false },
+    confidence: { type: Number, required: false },
+  },
 });
 
 const ChatSchema = new Schema<IChat>({
