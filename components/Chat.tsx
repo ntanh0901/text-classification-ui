@@ -27,6 +27,46 @@ type ChatState = {
   title: string;
 };
 
+type ModelType = 1 | 2; // 1 for ViT5, 2 for PhoBERT
+
+const CATEGORIES = [
+  "Chính trị Xã hội",
+  "Đời sống",
+  "Khoa học",
+  "Kinh doanh",
+  "Pháp luật",
+  "Sức khỏe",
+  "Thế giới",
+  "Thể thao",
+  "Văn hóa",
+  "Vi tính",
+];
+
+function GuideMessage() {
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+      <h3 className="text-lg font-medium text-blue-800 mb-2">
+        How to use this chat:
+      </h3>
+      <ul className="list-disc list-inside space-y-2 text-blue-700">
+        <li>Select a model (ViT5 or PhoBERT) from the top buttons</li>
+        <li>Enter any Vietnamese text to classify</li>
+        <li>
+          The AI will analyze and categorize your text into one of these
+          categories:
+        </li>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          {CATEGORIES.map((category) => (
+            <div key={category} className="bg-white rounded px-3 py-1 text-sm">
+              {category}
+            </div>
+          ))}
+        </div>
+      </ul>
+    </div>
+  );
+}
+
 function UserMessage({
   content,
   timestamp,
@@ -95,6 +135,7 @@ export function Chat() {
   const [chats, setChats] = useState<Record<string, ChatState>>({});
   const [userPrompt, setUserPrompt] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<ModelType>(2); // Default to PhoBERT
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom on new messages
@@ -177,13 +218,15 @@ export function Chat() {
     try {
       const request = new Request("/api/chat", {
         method: "POST",
-        body: JSON.stringify({ chatId: selectedChatId, userPrompt }),
+        body: JSON.stringify({
+          chatId: selectedChatId,
+          userPrompt,
+          modelType: selectedModel,
+        }),
       });
       const response = await fetch(request);
 
       if (response.ok) {
-        // Optionally, you can stream the response for animation
-        // For now, just update the chat with the new data
         const chat = await response.json();
         setChats((prev) => ({
           ...prev,
@@ -218,18 +261,52 @@ export function Chat() {
 
       {/* Main Chat Area */}
       <div className="flex-grow flex flex-col">
+        {/* Model Switch Button */}
+        <div className="bg-white border-b border-gray-200 p-4">
+          <div className="max-w-4xl mx-auto flex justify-end">
+            <div className="inline-flex rounded-md shadow-sm" role="group">
+              <button
+                type="button"
+                className={`px-4 py-2 text-sm font-medium rounded-l-lg ${
+                  selectedModel === 1
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-gray-700 hover:bg-gray-50"
+                } border border-gray-200`}
+                onClick={() => setSelectedModel(1)}
+                disabled={isProcessing}
+              >
+                ViT5
+              </button>
+              <button
+                type="button"
+                className={`px-4 py-2 text-sm font-medium rounded-r-lg ${
+                  selectedModel === 2
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-gray-700 hover:bg-gray-50"
+                } border border-gray-200`}
+                onClick={() => setSelectedModel(2)}
+                disabled={isProcessing}
+              >
+                PhoBERT
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Messages Area */}
         <div className="flex-grow overflow-y-auto p-4 space-y-4">
           {!selectedChatId || !currentChat?.messages.length ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center text-gray-500">
+            <div className="h-full flex flex-col items-center justify-center">
+              <div className="text-center text-gray-500 mb-8">
                 <h3 className="text-lg font-medium mb-2">
-                  Welcome to Text Classification
+                  Welcome to Vietnamese Text Classification
                 </h3>
                 <p className="text-sm">
-                  Enter some text to analyze its sentiment and intent.
+                  Select a model and enter some Vietnamese text to analyze its
+                  category.
                 </p>
               </div>
+              <GuideMessage />
             </div>
           ) : (
             <>
@@ -265,7 +342,7 @@ export function Chat() {
               <input
                 name="prompt"
                 autoFocus={true}
-                placeholder="Enter text to analyze..."
+                placeholder="Enter Vietnamese text to analyze..."
                 value={userPrompt}
                 onChange={(event) => setUserPrompt(event.target.value)}
                 type="text"
@@ -282,7 +359,11 @@ export function Chat() {
                 }`}
                 disabled={isProcessing || !selectedChatId}
               >
-                <SendIcon />
+                {isProcessing ? (
+                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <SendIcon />
+                )}
               </button>
             </div>
           </form>

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const { userPrompt, chatId } = await request.json();
+  const { userPrompt, chatId, modelType } = await request.json();
   await dbConnect();
 
   // Find the user first
@@ -59,9 +59,9 @@ export async function POST(request: NextRequest) {
     };
     chat.messages.push(userMessage);
 
-    // Generate bot response
+    // Always generate a bot response for every new user message
     let botResponse = "";
-    for await (const chunk of bot(userPrompt, String(chat._id))) {
+    for await (const chunk of bot(userPrompt, String(chat._id), modelType)) {
       botResponse += typeof chunk === "string" ? chunk : "";
     }
     if (botResponse.trim() !== "") {
